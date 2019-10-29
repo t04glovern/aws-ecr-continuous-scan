@@ -1,0 +1,69 @@
+service: ecr-continuous-scan
+
+package:
+  exclude:
+    - ./**
+  include:
+    - ./bin/**
+
+provider:
+  name: aws
+  runtime: go1.x
+  stage: dev
+  region: us-east-1
+  timeout: 30
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - ecr:*
+      Resource: '*'
+    - Effect: Allow
+      Action:
+        - s3:*
+      Resource:
+        - Fn::GetAtt: [ S3Bucket, Arn ]
+        - Fn::Join:
+          - ''
+          - - 'arn:aws:s3:::'
+            - Ref: S3Bucket
+            - '/*'
+  environment:
+    ECR_SCAN_CONFIG_BUCKET: !Ref S3Bucket
+
+functions:
+  configs:
+    handler: bin/configs
+    events:
+      - http:
+          path: configs
+          method: post
+      - http:
+          path: configs/{id}
+          method: delete
+      - http:
+          path: configs
+          method: get
+
+  summary:
+    handler: bin/summary
+    events:
+      - http:
+          path: summary
+          method: get
+
+  findings:
+    handler: bin/findings
+    events:
+      - http:
+          path: findings/{id}
+          method: get
+
+  start-scan:
+    handler: bin/start-scan
+    events:
+      - schedule: rate(24 hours)
+
+resources:
+  Resources:
+    S3Bucket:
+      Type: AWS::S3::Bucket
